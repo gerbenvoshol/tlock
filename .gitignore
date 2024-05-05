@@ -1,0 +1,19 @@
+# ignore object files
+*.o
+
+# ignone autotools generated files
+.deps/
+autom4te.cache/
+Makefile
+Makefile.in
+aclocal.m4
+config.*
+configure
+depcomp
+install-sh
+missing
+tlock.spec
+
+# ignore binaries
+tlock
+tlock_cli
