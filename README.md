@@ -1,8 +1,8 @@
 # Transparent Screenlock Program for Enterprise Linux
 
-This repository hosts a Transparent Screenlock Program tailored for Enterprise Linux environments. It's particularly useful in kiosk or operational settings where controlled access to the screen is essential. Installations are configured with a predefined list of groups permitted to unlock the screen on each computer, with comprehensive logging to track screen unlock activities.
+This repository hosts a Transparent Screenlock Program tailored for Linux environments. It's particularly useful in kiosk or operational settings where controlled access to the screen is essential. Installations are configured with a predefined list of groups permitted to unlock the screen on each computer, with comprehensive logging to track screen unlock activities.
 
-Inspired by e-motional.com's Transparent Screen Lock Security software designed for Windows Systems, this program has been adapted and optimized for EL6 and EL7 systems.
+Inspired by e-motional.com's Transparent Screen Lock Security software designed for Windows Systems, this program has been adapted and optimized for Linux systems.
 
 ## Features
 - **Transparent Locking**: A grey border appears around the desktop when the screen is locked.
