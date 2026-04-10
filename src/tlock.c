@@ -177,7 +177,8 @@ static void initXInfo(struct aXInfo* xi) {
 				XRRFreeMonitors(monitors);
 			}
 		}
-	}LOG("initialized xinfo.");
+	}
+	LOG("initialized xinfo.");
 }
 
 /* */
