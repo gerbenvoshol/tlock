@@ -200,12 +200,9 @@ static int tlock_auth_xspam_auth(const char* user, const char* pass, int as_gid)
 	/* Retrieve group list */
 	count = MAX_NO_GROUPS;
 	ret = getgrouplist(PAM_xs_username, pwd_xs_entry->pw_gid, gids, &count);
-	_SYSLOG_(
-	      "xs_auth_pam: user '%s' found in %d group(s) [%s-%s].\n",
+	_SYSLOG_("xs_auth_pam: user '%s' found in %d group(s).\n",
 	      PAM_xs_username,
-	      count,
-	      pwd_xs_entry->pw_passwd,
-	      pwd_xs_entry->pw_name);
+	      count);
 
 	if (ret != -1)
 	{
