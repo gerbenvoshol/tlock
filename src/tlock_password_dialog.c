@@ -311,7 +311,6 @@ dialog_t* tlock_create_dialog(struct aXInfo* xi,
 #endif
 
 	xswa.event_mask = KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask;
-	xi->dialog_window = dialog->container.win;
 	dialog->container.win = XCreateWindow(
 	        xi->display,
 	        xi->root[0],
@@ -325,6 +324,9 @@ dialog_t* tlock_create_dialog(struct aXInfo* xi,
 	        CopyFromParent,
 	        CWOverrideRedirect | CWColormap,
 	        &xswa);
+	/* Store dialog window handle in xinfo so callers (e.g. test mode) can
+	 * select input on it.  Must be set AFTER XCreateWindow. */
+	xi->dialog_window = dialog->container.win;
 	dialog->visible = 0;
 	dialog->redraw = True;
 

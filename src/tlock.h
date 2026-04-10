@@ -64,7 +64,13 @@
 /* ----------------------------------------------------------------  *
  * PAM AUTHENTICATION DEFINITIONS
  * ----------------------------------------------------------------  */
-#define PAM_SERVICE_NAME "system-auth"
+#ifndef PAM_SERVICE_NAME
+/* "login" is portable across distributions; override at build time with
+ * -DPAM_SERVICE_NAME=\"common-auth\" (Debian/Ubuntu) or
+ * -DPAM_SERVICE_NAME=\"system-auth\" (RHEL/CentOS)
+ */
+#define PAM_SERVICE_NAME "login"
+#endif
 #define STRING_LIMIT 64
 
 extern int tabpos;
@@ -86,6 +92,13 @@ struct aXInfo {
 	Cursor* cursor;
 
 	Window dialog_window;
+
+	/* Primary monitor geometry (for dialog placement).
+	 * Falls back to full root geometry if XRandR is unavailable. */
+	int primary_x;
+	int primary_y;
+	int primary_width;
+	int primary_height;
 };
 
 
@@ -115,6 +128,7 @@ struct aOpts {
 	struct aBackground* background;
 	int flash;
 	int gids;
+	int test;  /* test mode: display dialog without grabbing keyboard/pointer */
 };
 
 #endif /* _TLOCK_H_ */
