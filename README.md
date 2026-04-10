@@ -1,16 +1,18 @@
 # Transparent Screen Lock (tlock)
 
-A transparent screen-lock program for Linux X11 environments, originally developed at Cornell University. Useful in kiosk or operational settings where controlled, group-based access to the screen is required.
+A transparent screen-lock program for Linux X11 environments, originally developed at Cornell University. Designed for shared laboratory computers where different technicians share a single workstation under a general account, and screen locking provides access control between sessions.
 
 Inspired by e-motional.com's Transparent Screen Lock for Windows, adapted and extended for modern Linux.
 
 ## Features
 
 - **Transparent frame**: A coloured border (grey → green while typing → red on failure) wraps the desktop when locked.
-- **PAM authentication**: Uses the system PAM stack (`login` service by default, configurable at build time).
+- **Multiple authentication modules**: PAM (with group control), shadow passwd, bcrypt hash, or none.
+- **Multiple background modules**: Transparent (none), solid colour (blank), dimmed overlay (shade), PNG image.
+- **Multiple cursor modules**: Unchanged (none), invisible (blank), X11 glyph, Xcursor theme, PNG image.
 - **Group-based authorization**: Only users that belong to specified groups can unlock the screen.
 - **Multi-monitor support**: Automatically detects the primary monitor via XRandR and centres the dialog on it.
-- **Syslog logging**: Unlock attempts (success and failure) are written to the system log.
+- **GCLP-compliant syslog audit trail**: All lock, unlock, and authentication events are written to syslog. Passwords are never logged.
 - **Test mode** (`-test`): Preview the dialog and exercise authentication without actually locking the desktop.
 
 ---
@@ -29,16 +31,20 @@ Inspired by e-motional.com's Transparent Screen Lock for Windows, adapted and ex
 
 ### Runtime
 - X11 (`libx11`)
-- XRandR (`libxrandr`) – for multi-monitor primary-screen detection
+- XRandR (`libxrandr`) – multi-monitor primary-screen detection
+- XRender (`libxrender`) – `shade` background module
+- Xcursor (`libxcursor`) – `xcursor` and `image` cursor modules
 - PAM (`libpam`)
+- libpng (`libpng`) – `image` background/cursor modules
+- libcrypt (`libcrypt`) – `passwd` and `hash` auth modules
 - **xautolock** – to trigger locking after an idle period (optional but recommended)
 
 ### Build
 - GCC (or any C99 compiler)
 - Autotools (`autoconf`, `automake`)
 - Development headers:
-  - Debian / Ubuntu: `libx11-dev libxrandr-dev libxt-dev libpam0g-dev`
-  - RHEL / Fedora / CentOS: `libX11-devel libXrandr-devel libXt-devel pam-devel`
+  - Debian / Ubuntu: `libx11-dev libxrandr-dev libxt-dev libxrender-dev libxcursor-dev libpam0g-dev libpng-dev libcrypt-dev`
+  - RHEL / Fedora / CentOS: `libX11-devel libXrandr-devel libXt-devel libXrender-devel libXcursor-devel pam-devel libpng-devel libxcrypt-devel`
 
 ---
 
@@ -49,7 +55,8 @@ Inspired by e-motional.com's Transparent Screen Lock for Windows, adapted and ex
 ```bash
 # Install build dependencies
 sudo apt-get install -y gcc autoconf automake \
-    libx11-dev libxrandr-dev libxt-dev libpam0g-dev xautolock
+    libx11-dev libxrandr-dev libxt-dev libxrender-dev \
+    libxcursor-dev libpam0g-dev libpng-dev libcrypt-dev xautolock
 
 # Build and install
 autoreconf -fi
@@ -74,7 +81,8 @@ The PAM service defaults to `login`.  On Debian/Ubuntu you may prefer
 ```bash
 # Install build dependencies
 sudo dnf install -y gcc autoconf automake \
-    libX11-devel libXrandr-devel libXt-devel pam-devel xautolock
+    libX11-devel libXrandr-devel libXt-devel libXrender-devel \
+    libXcursor-devel pam-devel libpng-devel libxcrypt-devel xautolock
 
 # Build and install
 autoreconf -fi
@@ -97,7 +105,8 @@ If your site uses `system-auth`:
 ### Arch Linux
 
 ```bash
-sudo pacman -S gcc autoconf automake libx11 libxrandr libxt pam xautolock
+sudo pacman -S gcc autoconf automake libx11 libxrandr libxt libxrender \
+    libxcursor pam libpng xautolock
 
 autoreconf -fi
 ./configure --prefix=/usr/local
@@ -131,6 +140,9 @@ tlock -auth xspam,500,0 -gids
 
 # Lock using PAM + group authorisation (group names)
 tlock -auth xspam,mygroup,root
+
+# Lock with dim background + invisible cursor
+tlock -auth xspam,mygroup,root -bg shade:0.6 -cursor blank
 ```
 
 ### Test mode (no keyboard/pointer grab)
@@ -156,17 +168,65 @@ windows normally.
 5. **Clear** empties both fields.
 6. **Cancel** closes the dialog (screen remains locked).
 
+---
+
+## Module reference
+
+### Authentication modules (`-auth`)
+
+| Module | Description |
+|---|---|
+| `none` | No authentication – anyone can unlock. Not recommended. |
+| `pam` | Authenticate against the PAM stack (`login` service). See PAM service name section. |
+| `xspam[,group1,...]` | PAM authentication **with group membership check**. Only members of the listed groups can unlock. Use `-gids` to specify numeric GIDs instead of group names. |
+| `passwd[,group1,...]` | Authenticate against `/etc/shadow` using crypt(3). Optional group restriction. Requires tlock to be `setgid shadow` or run as root. |
+| `hash,<bcrypt-hash>[,group1,...]` | Verify password against a pre-computed crypt/bcrypt hash. Useful for shared unlock passwords without a dedicated system account. Optional group restriction. |
+
+#### Generating a hash for the `hash` module
+
+```bash
+# Using Python (bcrypt)
+python3 -c "import bcrypt; print(bcrypt.hashpw(b'mypassword', bcrypt.gensalt(12)).decode())"
+
+# Using openssl (SHA-512 crypt)
+openssl passwd -6 mypassword
+```
+
+Then pass the hash as the first argument:
+```bash
+tlock -auth "hash,\$6\$salt\$hashedvalue,techgroup"
+```
+
+### Background modules (`-bg`)
+
+| Module | Description |
+|---|---|
+| `none` | Transparent background (default) – desktop content remains visible. |
+| `blank[:<color>]` | Fill all screens with a solid colour. Default: `black`. Accepts X11 named colours or `#RRGGBB` hex. Example: `-bg blank:#1a1a2e` |
+| `shade[:<opacity>]` | Dim the screen with a semi-transparent black overlay via X RENDER. Opacity in `[0.0, 1.0]`, default `0.5`. Example: `-bg shade:0.7` |
+| `image:<path>[:<mode>]` | Display a PNG image. Modes: `scale` (default), `tile`, `center`. Example: `-bg image:/etc/tlock/bg.png:scale` |
+
+### Cursor modules (`-cursor`)
+
+| Module | Description |
+|---|---|
+| `none` | Leave the cursor unchanged (default). |
+| `blank` | Fully invisible cursor (1×1 transparent bitmap). |
+| `glyph[:<index>]` | X11 cursor-font glyph. Default: 150 (XC_watch). See `<X11/cursorfont.h>` for all indices. |
+| `xcursor[:<name>]` | Load a cursor from the current Xcursor theme. Default: `watch`. Example: `-cursor xcursor:left_ptr` |
+| `image:<path>[:<hx>,<hy>]` | Load a PNG (RGBA) as the cursor. `hx,hy` = hotspot offset (default: `0,0`). Example: `-cursor image:/etc/tlock/cursor.png:4,4` |
+
 ### Command-line options
 
 | Option | Description |
 |---|---|
-| `-auth <module>[,args]` | Authentication module: `none`, `pam`, `xspam,group1,group2,...` |
-| `-gids` | Interpret group specifiers in xspam as numeric GIDs (default: group names) |
+| `-auth <module>[,args]` | Authentication module (see above) |
+| `-bg <module>[:<args>]` | Background module (see above) |
+| `-cursor <module>[:<args>]` | Cursor module (see above) |
+| `-gids` | Interpret group specifiers as numeric GIDs (default: group names) |
 | `-test` | Test mode: show dialog without grabbing keyboard/pointer |
-| `-pre` | Pre-authorisation check: exit immediately if the current user can already unlock |
+| `-pre` | Pre-authorisation check: skip lock if current user is already in the allowed group |
 | `-flash` | Flash the border colour while idle |
-| `-bg <type>` | Background module (currently only `none`) |
-| `-cursor <type>` | Cursor module (currently only `none`) |
 | `-v` | Print version |
 | `-h` | Print usage |
 
@@ -189,6 +249,44 @@ Common values:
 | Debian / Ubuntu | `common-auth` |
 | Arch Linux | `system-local-login` |
 | Most others | `login` |
+
+---
+
+## Audit logging (GCLP compliance)
+
+tlock writes all security-relevant events to `syslog` using the `LOG_LOCAL1`
+facility.  This ensures events appear in the system audit trail and can be
+forwarded to a central log server (e.g. via rsyslog or journald).
+
+### Log event format
+
+| Keyword | Level | Meaning |
+|---|---|---|
+| `SCREEN_LOCKED` | NOTICE | Screen was locked (recorded at lock time) |
+| `SCREEN_UNLOCKED` | NOTICE | Lock session ended |
+| `UNLOCK_SUCCESS` | NOTICE | User authenticated and was granted access |
+| `UNLOCK_FAILED` | WARNING | Authentication attempt failed |
+| `UNLOCK_LOCKED_OUT` | ALERT | Too many failed attempts (`-DATTEMPT_LIMIT=n`) |
+| `PRECHECK` | NOTICE | Pre-authorisation check result |
+
+### Sample log lines
+
+```
+Apr 10 14:00:01 lab-pc01 tlock[1234]: SCREEN_LOCKED: uid=1000 user=labuser auth=xspam groups_as=name
+Apr 10 14:05:23 lab-pc01 tlock[1234]: UNLOCK_FAILED: user=johndoe auth=xspam
+Apr 10 14:05:41 lab-pc01 tlock[1234]: UNLOCK_SUCCESS: user=johndoe auth=xspam group=techgroup
+Apr 10 14:05:41 lab-pc01 tlock[1234]: SCREEN_UNLOCKED: uid=1000 user=labuser
+```
+
+**Passwords are never logged.**  The username is always recorded to provide a
+traceable audit record (which technician unlocked the workstation and when).
+
+### Configuring rsyslog to capture tlock events
+
+```
+# /etc/rsyslog.d/tlock.conf
+local1.*   /var/log/tlock.log
+```
 
 ---
 

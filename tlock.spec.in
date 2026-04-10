@@ -14,7 +14,11 @@ Requires: xautolock
 BuildRequires: gcc
 BuildRequires: libXt-devel
 BuildRequires: libXrandr-devel
+BuildRequires: libXrender-devel
+BuildRequires: libXcursor-devel
 BuildRequires: pam-devel
+BuildRequires: libpng-devel
+BuildRequires: libxcrypt-devel
 
 %description
 The "Transparent Lock" program...

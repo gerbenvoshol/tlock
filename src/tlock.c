@@ -46,24 +46,35 @@ int tabpos = -1; //-1 if invalid/unknown, 0 if user field, 1 if password field, 
 extern struct aAuth tlock_auth_none;
 extern struct aAuth tlock_auth_pam;
 extern struct aAuth tlock_auth_xspam;
+extern struct aAuth tlock_auth_passwd;
+extern struct aAuth tlock_auth_hash;
 static struct aAuth* tlock_authmodules[] =
-	{ &tlock_auth_none, &tlock_auth_xspam, &tlock_auth_pam, NULL };
+	{ &tlock_auth_none, &tlock_auth_xspam, &tlock_auth_pam,
+	  &tlock_auth_passwd, &tlock_auth_hash, NULL };
 
 /**
  * --------------------------------------------------------------------------------
  * tlock : background implementations
  * -------------------------------------------------------------------------------- */
 extern struct aBackground tlock_bg_none;
+extern struct aBackground tlock_bg_blank;
+extern struct aBackground tlock_bg_shade;
+extern struct aBackground tlock_bg_image;
 static struct aBackground* tlock_backgrounds[] =
-	{ &tlock_bg_none, NULL };
+	{ &tlock_bg_none, &tlock_bg_blank, &tlock_bg_shade, &tlock_bg_image, NULL };
 
 /** --------------------------------------------------------------------------------
  * tlock : cursors implementations
  * -------------------------------------------------------------------------------- */
 extern struct aCursor tlock_cursor_none;
+extern struct aCursor tlock_cursor_blank;
+extern struct aCursor tlock_cursor_glyph;
+extern struct aCursor tlock_cursor_xcursor;
+extern struct aCursor tlock_cursor_image;
 
 static struct aCursor* tlock_cursors[] =
-	{ &tlock_cursor_none, NULL };
+	{ &tlock_cursor_none, &tlock_cursor_blank, &tlock_cursor_glyph,
+	  &tlock_cursor_xcursor, &tlock_cursor_image, NULL };
 /* ---------------------------------------------------------------- */
 
 static const char* tlock_color_swatch[] =
@@ -237,25 +248,24 @@ static int challenge_response_feedback(struct aOpts* opts,
       const char* username,
       const char* passwd) {
 
-	// if the user is part of the privileged
-	// group then exit otherwise
-	// continue
 	int ret = opts->auth->auth(strdup(username), strdup(passwd), opts->gids);
 
-	syslog(LOG_NOTICE, "tlock: authentication for user %s: returned %d\n", username, ret);
-	DEBUG_EVENT_LOOP("authentication");
 	if (ret == 1) {
+		/* GCLP audit: successful unlock – record who authenticated. */
+		TLOCK_NOTICE("UNLOCK_SUCCESS: user=%s auth=%s", username, opts->auth->name);
 		LOG("entering Free Frame");
 		tlock_free_frame(xi, *pframe);
 		*pframe = NULL;
 		LOG("exiting Free Frame");
 		return 1;
 	} else {
-		fprintf( stderr, "authentication: u=%s, exit=%d\n", username, ret);
+		/* GCLP audit: failed attempt – log user so repeated failures are
+		 * visible in the audit trail.  Password is deliberately not logged. */
+		TLOCK_WARNING("UNLOCK_FAILED: user=%s auth=%s", username, opts->auth->name);
 		LOG("authentication failed.");
 #ifdef ATTEMPT_LIMIT
 		if (--attempt < 1) {
-			syslog(LOG_ALERT, "Ended tlock with incorrect match!");
+			TLOCK_ALERT("UNLOCK_LOCKED_OUT: user=%s too many failed attempts", username);
 			closelog();
 			exit(0);
 		}
@@ -915,15 +925,18 @@ int main(int argc, char **argv) {
 	}
 
 	openlog("tlock", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL1);
-	syslog(LOG_NOTICE, "program started by user %d(%s), accepting groups as '%s' only.", getuid(), getenv("USER"),
-		opts.gids ? "id" : "names");
-	// pre authorization check
+	/* GCLP audit: record lock event with the initiating UID and username. */
+	TLOCK_NOTICE("SCREEN_LOCKED: uid=%d user=%s auth=%s groups_as=%s",
+		getuid(), getenv("USER") ? getenv("USER") : "(unknown)",
+		opts.auth->name,
+		opts.gids ? "gid" : "name");
+
+	/* pre-authorisation check: if the current user is already in the
+	 * allowed group, skip the lock entirely. */
 	if (precheck == 1) {
 		if (opts.auth != NULL) {
 			int ret = opts.auth->auth(NULL, NULL, 0);
-			syslog(
-			LOG_NOTICE, "%s: %s[exit=%d]\n",
-			__FILE__, __FUNCTION__, ret);
+			TLOCK_NOTICE("PRECHECK: uid=%d result=%d", getuid(), ret);
 
 			if (ret != 1) {
 				registerInstance(&xinfo);
@@ -939,6 +952,9 @@ int main(int argc, char **argv) {
 		unregisterInstance(&xinfo);
 	}
 
+	/* GCLP audit: lock session ended (either unlocked or process killed). */
+	TLOCK_NOTICE("SCREEN_UNLOCKED: uid=%d user=%s",
+		getuid(), getenv("USER") ? getenv("USER") : "(unknown)");
 	closelog();
 
 	opts.auth->deinit();
