@@ -7,10 +7,10 @@
  Usage: -cursor glyph[:<glyph-index>]
 
    <glyph-index> is a numeric index into the X11 cursor font (cursorfont.h).
-   Default: 68 (XC_lock).
+   Default: 150 (XC_watch).
 
  Common glyph indices:
-   XC_arrow=2  XC_cross=34  XC_lock=68  XC_watch=150  XC_X_cursor=0
+   XC_arrow=2  XC_cross=34  XC_watch=150  XC_clock=16  XC_X_cursor=0
  ============================================================================
  */
 

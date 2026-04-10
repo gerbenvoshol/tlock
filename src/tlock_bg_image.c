@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <X11/Xutil.h>
 #include <png.h>
 
 static Window *img_windows = NULL;
@@ -270,17 +271,23 @@ static int tlock_bg_image_init(const char *args, struct aXInfo *xinfo)
 			               (unsigned)sw, (unsigned)sh);
 			XImage *xi = rgba_to_ximage(xinfo->display, visual, depth, &src);
 			if (xi) {
+				/* ox, oy: top-left destination offset on screen
+				 * cx, cy: clip offset into the source image
+				 * cw, ch: how many pixels of the source image to copy */
 				int ox = (sw - src.width)  / 2;
 				int oy = (sh - src.height) / 2;
 				int cx = ox < 0 ? -ox : 0;
 				int cy = oy < 0 ? -oy : 0;
-				int cw = src.width  - 2 * cx;
-				int ch = src.height - 2 * cy;
+				int cw = src.width  - cx;   /* right-edge of source */
+				int ch = src.height - cy;   /* bottom-edge of source */
+				int dst_x = ox < 0 ? 0 : ox;
+				int dst_y = oy < 0 ? 0 : oy;
+				/* Clamp to screen boundaries */
+				if (dst_x + cw > sw) cw = sw - dst_x;
+				if (dst_y + ch > sh) ch = sh - dst_y;
 				if (cw > 0 && ch > 0)
 					XPutImage(xinfo->display, pm, gc, xi,
-					          cx, cy,
-					          ox < 0 ? 0 : ox,
-					          oy < 0 ? 0 : oy,
+					          cx, cy, dst_x, dst_y,
 					          (unsigned)cw, (unsigned)ch);
 				xi->data = NULL;
 				XDestroyImage(xi);
